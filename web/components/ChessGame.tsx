@@ -5,8 +5,18 @@ import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PlayerBar from "@/components/PlayerBar";
 
 type MoveSquares = { from: Square; to: Square };
+
+// Fixed board theme: the same in light and dark mode.
+// (react-chessboard types these as plain records, not CSSProperties.)
+const LIGHT_SQUARE_STYLE = { backgroundColor: "#ebecd0" };
+const DARK_SQUARE_STYLE = { backgroundColor: "#779556" };
+const BOARD_STYLE = {
+  borderRadius: "8px",
+  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
+};
 
 const LAST_MOVE_STYLE: CSSProperties = { background: "rgba(255, 214, 10, 0.45)" };
 const SELECTED_STYLE: CSSProperties = { background: "rgba(20, 85, 30, 0.5)" };
@@ -106,41 +116,72 @@ export default function ChessGame() {
     }
   }
 
+  // The side at the bottom of the board is whichever colour it's oriented to.
+  const bottomColor = orientation === "white" ? "w" : "b";
+  const topColor = bottomColor === "w" ? "b" : "w";
+  const gameOver = game.isGameOver();
+  const playerBar = (color: "w" | "b") => (
+    <PlayerBar
+      name={color === "w" ? "White" : "Black"}
+      color={color}
+      isTurn={!gameOver && game.turn() === color}
+    />
+  );
+
   return (
-    <div className="flex w-full max-w-[560px] flex-col gap-4">
-      <p className="text-center text-lg font-medium" aria-live="polite">
-        {gameStatus(game)}
-      </p>
+    <div className="grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+      {/* Board column: capped by viewport height so the whole board fits on screen */}
+      <section className="mx-auto flex w-full max-w-[min(680px,calc(100dvh_-_13rem))] min-w-[280px] flex-col gap-2">
+        {playerBar(topColor)}
+        <Chessboard
+          position={fen}
+          boardOrientation={orientation}
+          onPieceDrop={onPieceDrop}
+          onSquareClick={onSquareClick}
+          onPieceDragBegin={() => setSelected(null)}
+          onPromotionCheck={(from, to) => isPromotion(from, to)}
+          onPromotionPieceSelect={onPromotionPieceSelect}
+          showPromotionDialog={pendingPromotion !== null}
+          promotionToSquare={pendingPromotion?.to ?? null}
+          isDraggablePiece={({ piece }) => !gameOver && piece[0] === game.turn()}
+          customSquareStyles={squareStyles}
+          customLightSquareStyle={LIGHT_SQUARE_STYLE}
+          customDarkSquareStyle={DARK_SQUARE_STYLE}
+          customBoardStyle={BOARD_STYLE}
+          animationDuration={200}
+        />
+        {playerBar(bottomColor)}
+      </section>
 
-      <Chessboard
-        position={fen}
-        boardOrientation={orientation}
-        onPieceDrop={onPieceDrop}
-        onSquareClick={onSquareClick}
-        onPieceDragBegin={() => setSelected(null)}
-        onPromotionCheck={(from, to) => isPromotion(from, to)}
-        onPromotionPieceSelect={onPromotionPieceSelect}
-        showPromotionDialog={pendingPromotion !== null}
-        promotionToSquare={pendingPromotion?.to ?? null}
-        isDraggablePiece={({ piece }) => !game.isGameOver() && piece[0] === game.turn()}
-        customSquareStyles={squareStyles}
-        customBoardStyle={{ borderRadius: "6px", boxShadow: "0 4px 16px rgba(0, 0, 0, 0.3)" }}
-        animationDuration={200}
-      />
+      {/* Side panel */}
+      <aside className="flex flex-col gap-4 rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Status
+          </p>
+          <p className="mt-1 text-lg font-semibold" aria-live="polite">
+            {gameStatus(game)}
+          </p>
+        </div>
 
-      <div className="flex justify-center gap-3">
-        <Button onClick={newGame}>
-          <RefreshCw />
-          New game
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
-        >
-          <ArrowDownUp />
-          Flip board
-        </Button>
-      </div>
+        <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          Moves will appear here
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button onClick={newGame}>
+            <RefreshCw />
+            New game
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
+          >
+            <ArrowDownUp />
+            Flip board
+          </Button>
+        </div>
+      </aside>
     </div>
   );
 }
