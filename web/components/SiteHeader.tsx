@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SoundToggle from "@/components/SoundToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function SiteHeader() {
@@ -11,7 +12,10 @@ export default function SiteHeader() {
           </span>
           ChessBot
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <SoundToggle />
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

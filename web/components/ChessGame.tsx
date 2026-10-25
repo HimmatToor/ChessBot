@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, type CSSProperties } from "react";
-import { Chess, type Square } from "chess.js";
+import { Chess, type Move, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PlayerBar from "@/components/PlayerBar";
 import { materialBalance } from "@/lib/material";
+import { playSound, type SoundName } from "@/lib/sounds";
 
 type MoveSquares = { from: Square; to: Square };
 
@@ -48,11 +49,13 @@ export default function ChessGame() {
     legalMovesFrom(from).some((m) => m.to === to && m.promotion);
 
   function makeMove(from: Square, to: Square, promotion?: string): boolean {
+    let move: Move;
     try {
-      game.move({ from, to, promotion });
+      move = game.move({ from, to, promotion });
     } catch {
       return false; // chess.js throws on illegal moves
     }
+    playSound(moveSound(game, move));
     setFen(game.fen());
     setLastMove({ from, to });
     setSelected(null);
@@ -187,6 +190,13 @@ export default function ChessGame() {
       </aside>
     </div>
   );
+}
+
+function moveSound(game: Chess, move: Move): SoundName {
+  if (game.isGameOver()) return "end";
+  if (game.isCheck()) return "check";
+  if (move.isCapture()) return "capture";
+  return "move";
 }
 
 function gameStatus(game: Chess): string {
