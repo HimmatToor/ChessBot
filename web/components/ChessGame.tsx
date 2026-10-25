@@ -3,6 +3,8 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
+import { ArrowDownUp, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type MoveSquares = { from: Square; to: Square };
 
@@ -127,18 +129,17 @@ export default function ChessGame() {
       />
 
       <div className="flex justify-center gap-3">
-        <button
-          onClick={newGame}
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-85"
-        >
+        <Button onClick={newGame}>
+          <RefreshCw />
           New game
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
-          className="rounded-md border border-foreground/20 px-4 py-2 text-sm font-medium hover:bg-foreground/10"
         >
+          <ArrowDownUp />
           Flip board
-        </button>
+        </Button>
       </div>
     </div>
   );
