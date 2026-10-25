@@ -6,6 +6,7 @@ import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PlayerBar from "@/components/PlayerBar";
+import { materialBalance } from "@/lib/material";
 
 type MoveSquares = { from: Square; to: Square };
 
@@ -120,11 +121,13 @@ export default function ChessGame() {
   const bottomColor = orientation === "white" ? "w" : "b";
   const topColor = bottomColor === "w" ? "b" : "w";
   const gameOver = game.isGameOver();
+  const material = materialBalance(game.board());
   const playerBar = (color: "w" | "b") => (
     <PlayerBar
       name={color === "w" ? "White" : "Black"}
       color={color}
       isTurn={!gameOver && game.turn() === color}
+      material={material[color]}
     />
   );
 
