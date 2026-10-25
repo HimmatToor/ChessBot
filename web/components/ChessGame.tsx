@@ -5,7 +5,10 @@ import { Chess, type Move, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import GameOverDialog from "@/components/GameOverDialog";
 import PlayerBar from "@/components/PlayerBar";
+import { gameResult, type GameResult } from "@/lib/gameResult";
+import { cn } from "@/lib/utils";
 import { materialBalance } from "@/lib/material";
 import { playSound, type SoundName } from "@/lib/sounds";
 
@@ -42,6 +45,8 @@ export default function ChessGame() {
   const [lastMove, setLastMove] = useState<MoveSquares | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<MoveSquares | null>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const legalMovesFrom = (square: Square) => game.moves({ square, verbose: true });
 
@@ -59,6 +64,10 @@ export default function ChessGame() {
     setFen(game.fen());
     setLastMove({ from, to });
     setSelected(null);
+    if (game.isGameOver()) {
+      // Let the final move animate before the dialog covers the board.
+      dialogTimer.current = setTimeout(() => setDialogOpen(true), 600);
+    }
     return true;
   }
 
@@ -97,6 +106,8 @@ export default function ChessGame() {
   }
 
   function newGame() {
+    if (dialogTimer.current) clearTimeout(dialogTimer.current);
+    setDialogOpen(false);
     game.reset();
     setFen(game.fen());
     setSelected(null);
@@ -124,6 +135,8 @@ export default function ChessGame() {
   const bottomColor = orientation === "white" ? "w" : "b";
   const topColor = bottomColor === "w" ? "b" : "w";
   const gameOver = game.isGameOver();
+  const result = gameResult(game);
+  const status = statusText(game, result);
   const material = materialBalance(game.board());
   const playerBar = (color: "w" | "b") => (
     <PlayerBar
@@ -165,8 +178,16 @@ export default function ChessGame() {
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Status
           </p>
-          <p className="mt-1 text-lg font-semibold" aria-live="polite">
-            {gameStatus(game)}
+          {/* Keyed on the text so each change replays the fade-in. */}
+          <p
+            key={status}
+            className={cn(
+              "mt-1 text-lg font-semibold animate-in fade-in slide-in-from-bottom-1 duration-300",
+              result && "text-primary",
+            )}
+            aria-live="polite"
+          >
+            {status}
           </p>
         </div>
 
@@ -188,6 +209,13 @@ export default function ChessGame() {
           </Button>
         </div>
       </aside>
+
+      <GameOverDialog
+        result={result}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onNewGame={newGame}
+      />
     </div>
   );
 }
@@ -199,13 +227,8 @@ function moveSound(game: Chess, move: Move): SoundName {
   return "move";
 }
 
-function gameStatus(game: Chess): string {
+function statusText(game: Chess, result: GameResult | null): string {
+  if (result) return `${result.title}: ${result.detail}`;
   const side = game.turn() === "w" ? "White" : "Black";
-  const other = game.turn() === "w" ? "Black" : "White";
-  if (game.isCheckmate()) return `Checkmate: ${other} wins`;
-  if (game.isStalemate()) return "Draw by stalemate";
-  if (game.isThreefoldRepetition()) return "Draw by threefold repetition";
-  if (game.isInsufficientMaterial()) return "Draw by insufficient material";
-  if (game.isDrawByFiftyMoves()) return "Draw by the 50-move rule";
   return game.isCheck() ? `${side} to move (check)` : `${side} to move`;
 }
