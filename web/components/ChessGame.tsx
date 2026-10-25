@@ -6,6 +6,7 @@ import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GameOverDialog from "@/components/GameOverDialog";
+import MoveList from "@/components/MoveList";
 import PlayerBar from "@/components/PlayerBar";
 import { gameResult, type GameResult } from "@/lib/gameResult";
 import { cn } from "@/lib/utils";
@@ -191,9 +192,7 @@ export default function ChessGame() {
           </p>
         </div>
 
-        <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-          Moves will appear here
-        </div>
+        <MoveList moves={game.history()} />
 
         <div className="grid grid-cols-2 gap-2">
           <Button onClick={newGame}>
