@@ -2,14 +2,14 @@
 
 import type { Chess } from "chess.js";
 import type { Bot, BotMove } from "@/lib/bot";
-import type { BestMove, WorkerRequest, WorkerResponse } from "./protocol";
+import type { BestMove, SearchSettings, WorkerRequest, WorkerResponse } from "./protocol";
 
 const MODEL_URL = "/models/chessnet.onnx";
 const WASM_PATHS = "/ort/";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-export function createNeuralBot(name = "ChessBot"): Bot {
+export function createNeuralBot(settings: SearchSettings, name = "ChessBot"): Bot {
   let worker: Worker | null = null;
   let ready: Promise<unknown> | null = null;
   let nextId = 0;
@@ -54,8 +54,12 @@ export function createNeuralBot(name = "ChessBot"): Bot {
       // Snapshot the moves before awaiting: the caller's game object may change meanwhile.
       const moves = game.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion ?? ""));
       await prepare();
-      const best = await request({ type: "bestMove", moves });
+      const best = await request({ type: "search", moves, settings });
       if (!best) throw new Error("engine returned no move");
+      console.debug(
+        `[ChessBot] ${best.simulations} simulations in ${best.timeMs} ms, ` +
+          `eval ${best.value.toFixed(2)}, line ${best.pv.join(" ")}`,
+      );
       return best.move;
     },
   };

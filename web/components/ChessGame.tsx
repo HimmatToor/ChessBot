@@ -18,7 +18,8 @@ import { playSound, type SoundName } from "@/lib/sounds";
 
 type MoveSquares = { from: Square; to: Square };
 
-const bot: Bot = createNeuralBot();
+// Difficulty levels come in the next step; until then one fixed search budget.
+const bot: Bot = createNeuralBot({ simulations: 400, timeLimitMs: 3000 });
 // Even an instant bot waits a moment, so its reply doesn't feel jarring.
 const BOT_MIN_DELAY_MS = 400;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -1,11 +1,10 @@
-// Web Worker that owns the neural network, so inference never blocks the page.
+// Web Worker that owns the neural network and the search, so thinking never blocks the page.
 
 /// <reference lib="webworker" />
 
 import { Chess } from "chess.js";
-import { encodeBoard } from "./encode";
+import { search } from "./mcts";
 import { Network } from "./network";
-import { interpret } from "./policy";
 import type { BestMove, WorkerRequest, WorkerResponse } from "./protocol";
 
 let network: Promise<Network> | null = null;
@@ -17,17 +16,23 @@ async function handle(request: WorkerRequest): Promise<BestMove | null> {
       await network;
       return null;
 
-    case "bestMove": {
+    case "search": {
       if (!network) throw new Error("engine not initialised");
+      const net = await network;
+      // Replay the whole game so repetition draws are detected during the search.
       const game = new Chess();
       for (const uci of request.moves) {
         game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
       }
-      const { policy, wdl } = await (await network).evaluate(encodeBoard(game), 1);
-      const evaluation = interpret(game, policy, wdl);
-      const best = evaluation.moves[0];
-      if (!best) throw new Error("no legal moves");
-      return { move: best.move, prior: best.prior, value: evaluation.value };
+      const start = performance.now();
+      const result = await search(game, (planes, batch) => net.evaluate(planes, batch), request.settings);
+      return {
+        move: result.move,
+        value: result.value,
+        pv: result.pv,
+        simulations: result.simulations,
+        timeMs: Math.round(performance.now() - start),
+      };
     }
   }
 }

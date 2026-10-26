@@ -12,7 +12,7 @@
     "prebuild": "node scripts/copy-ort-wasm.mjs"
   },
   "dependencies": {
-    "chess.js": "^1.4.0",
+    "chess.js": "1.4.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
     "lucide-react": "^1.61.0",

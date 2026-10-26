@@ -9,6 +9,7 @@
 // for Black the board is mirrored vertically (sq ^ 56) and colours swapped.
 
 import type { Chess, Color, PieceSymbol, Square } from "chess.js";
+import { fastLegalMoves, type InternalMove } from "./fastMoves";
 
 export const NUM_PLANES = 18;
 export const NUM_MOVES = 1858;
@@ -90,8 +91,10 @@ export function encodeBoard(
   if (theirs.q) fillPlane(16);
 
   // Only when an en-passant capture is actually legal (matches the Python).
-  const enPassant = game.moves({ verbose: true }).find((m) => m.isEnPassant());
-  if (enPassant) set(17, orient(squareIndex(enPassant.to), us));
+  // chess.js's FEN applies exactly that rule, and is much cheaper than
+  // generating verbose moves.
+  const enPassant = game.fen().split(" ")[3];
+  if (enPassant !== "-") set(17, orient(squareIndex(enPassant), us));
 
   return out;
 }
@@ -117,11 +120,13 @@ export function decodeMove(index: number, game: Chess): MoveInput {
   return piece?.type === "p" && lastRank ? { from, to, promotion: "q" } : { from, to };
 }
 
-/** Every legal move in `game` with its policy index. */
-export function legalMoves(game: Chess): { index: number; move: MoveInput }[] {
+export type LegalMove = { index: number; move: MoveInput; internal: InternalMove };
+
+/** Every legal move in `game` with its policy index (and chess.js's internal move, for the search). */
+export function legalMoves(game: Chess): LegalMove[] {
   const turn = game.turn();
-  return game.moves({ verbose: true }).map((m) => {
-    const move: MoveInput = { from: m.from, to: m.to, promotion: m.promotion };
-    return { index: encodeMove(move, turn), move };
+  return fastLegalMoves(game).map(({ from, to, promotion, internal }) => {
+    const move: MoveInput = promotion ? { from, to, promotion } : { from, to };
+    return { index: encodeMove(move, turn), move, internal };
   });
 }
