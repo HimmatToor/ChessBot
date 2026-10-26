@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState, type CSSProperties } from "react";
-import { Chess, type Move, type Square } from "chess.js";
+import { Chess, type Color, type Move, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, Check, Copy, Download, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GameOverDialog from "@/components/GameOverDialog";
 import MoveList from "@/components/MoveList";
 import PlayerBar from "@/components/PlayerBar";
+import { randomBot, type Bot, type BotMove } from "@/lib/bot";
 import { gameResult, type GameResult } from "@/lib/gameResult";
 import { exportPgn } from "@/lib/pgn";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,11 @@ import { materialBalance } from "@/lib/material";
 import { playSound, type SoundName } from "@/lib/sounds";
 
 type MoveSquares = { from: Square; to: Square };
+
+const bot: Bot = randomBot;
+// Even an instant bot waits a moment, so its reply doesn't feel jarring.
+const BOT_MIN_DELAY_MS = 400;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Fixed board theme: the same in light and dark mode.
 // (react-chessboard types these as plain records, not CSSProperties.)
@@ -47,6 +53,11 @@ export default function ChessGame() {
   const [lastMove, setLastMove] = useState<MoveSquares | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<MoveSquares | null>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
+  const [playerColor, setPlayerColor] = useState<Color>("w");
+  const [botThinking, setBotThinking] = useState(false);
+  // Bumped whenever the position is reset or taken back, so a bot reply
+  // that was still being computed for the old position gets discarded.
+  const botToken = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -56,22 +67,52 @@ export default function ChessGame() {
   const isPromotion = (from: Square, to: Square) =>
     legalMovesFrom(from).some((m) => m.to === to && m.promotion);
 
-  function makeMove(from: Square, to: Square, promotion?: string): boolean {
+  const isPlayersTurn = () => !game.isGameOver() && !botThinking && game.turn() === playerColor;
+
+  /** Plays a move for either side and updates the UI. */
+  function applyMove(input: BotMove): Move | null {
     let move: Move;
     try {
-      move = game.move({ from, to, promotion });
+      move = game.move(input);
     } catch {
-      return false; // chess.js throws on illegal moves
+      return null; // chess.js throws on illegal moves
     }
     playSound(moveSound(game, move));
     setFen(game.fen());
-    setLastMove({ from, to });
+    setLastMove({ from: move.from, to: move.to });
     setSelected(null);
     if (game.isGameOver()) {
       // Let the final move animate before the dialog covers the board.
       dialogTimer.current = setTimeout(() => setDialogOpen(true), 600);
     }
-    return true;
+    return move;
+  }
+
+  /** Human move from a drag, click or promotion pick. */
+  function makeMove(from: Square, to: Square, promotion?: string): boolean {
+    if (!isPlayersTurn()) return false;
+    const move = applyMove({ from, to, promotion });
+    if (move && !game.isGameOver()) void playBotMove();
+    return move !== null;
+  }
+
+  async function playBotMove() {
+    const token = ++botToken.current;
+    setBotThinking(true);
+    const [move] = await Promise.all([bot.chooseMove(game.fen()), delay(BOT_MIN_DELAY_MS)]);
+    if (token !== botToken.current) return; // position changed while thinking
+    setBotThinking(false);
+    applyMove(move);
+  }
+
+  function cancelBot() {
+    botToken.current++;
+    setBotThinking(false);
+  }
+
+  function closeDialog() {
+    if (dialogTimer.current) clearTimeout(dialogTimer.current);
+    setDialogOpen(false);
   }
 
   function onPieceDrop(from: Square, to: Square): boolean {
@@ -89,7 +130,7 @@ export default function ChessGame() {
   }
 
   function onSquareClick(square: Square) {
-    if (game.isGameOver()) return;
+    if (!isPlayersTurn()) return;
 
     if (selected && legalMovesFrom(selected).some((m) => m.to === square)) {
       if (isPromotion(selected, square)) {
@@ -108,10 +149,12 @@ export default function ChessGame() {
     }
   }
 
+  /** Takes back your last move (and the bot's reply, if it has made one). */
   function undo() {
-    if (!game.undo()) return;
-    if (dialogTimer.current) clearTimeout(dialogTimer.current);
-    setDialogOpen(false);
+    cancelBot();
+    closeDialog();
+    game.undo();
+    if (game.turn() !== playerColor) game.undo();
     const previous = game.history({ verbose: true }).at(-1);
     setLastMove(previous ? { from: previous.from, to: previous.to } : null);
     setFen(game.fen());
@@ -119,9 +162,15 @@ export default function ChessGame() {
     setPendingPromotion(null);
   }
 
+  const pgn = () =>
+    exportPgn(game, {
+      white: playerColor === "w" ? "You" : bot.name,
+      black: playerColor === "b" ? "You" : bot.name,
+    });
+
   async function copyPgn() {
     try {
-      await navigator.clipboard.writeText(exportPgn(game));
+      await navigator.clipboard.writeText(pgn());
       setCopyState("copied");
     } catch {
       setCopyState("failed"); // clipboard needs a secure context + permission
@@ -130,7 +179,7 @@ export default function ChessGame() {
   }
 
   function downloadPgn() {
-    const blob = new Blob([exportPgn(game)], { type: "application/x-chess-pgn" });
+    const blob = new Blob([pgn()], { type: "application/x-chess-pgn" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -139,14 +188,17 @@ export default function ChessGame() {
     URL.revokeObjectURL(url);
   }
 
-  function newGame() {
-    if (dialogTimer.current) clearTimeout(dialogTimer.current);
-    setDialogOpen(false);
+  function newGame(color: Color = playerColor) {
+    cancelBot();
+    closeDialog();
     game.reset();
     setFen(game.fen());
     setSelected(null);
     setLastMove(null);
     setPendingPromotion(null);
+    setPlayerColor(color);
+    setOrientation(color === "w" ? "white" : "black");
+    if (color === "b") void playBotMove(); // bot opens as White
   }
 
   const squareStyles: Record<string, CSSProperties> = {};
@@ -170,13 +222,15 @@ export default function ChessGame() {
   const topColor = bottomColor === "w" ? "b" : "w";
   const gameOver = game.isGameOver();
   const result = gameResult(game);
-  const status = statusText(game, result);
+  const status = botThinking ? `${bot.name} is thinking…` : statusText(game, result);
   const moves = game.history();
   const hasMoves = moves.length > 0;
+  // Undo needs at least one of *your* moves (as Black, the first move is the bot's).
+  const canUndo = moves.length >= (playerColor === "w" ? 1 : 2);
   const material = materialBalance(game.board());
-  const playerBar = (color: "w" | "b") => (
+  const playerBar = (color: Color) => (
     <PlayerBar
-      name={color === "w" ? "White" : "Black"}
+      name={color === playerColor ? "You" : bot.name}
       color={color}
       isTurn={!gameOver && game.turn() === color}
       material={material[color]}
@@ -198,7 +252,7 @@ export default function ChessGame() {
           onPromotionPieceSelect={onPromotionPieceSelect}
           showPromotionDialog={pendingPromotion !== null}
           promotionToSquare={pendingPromotion?.to ?? null}
-          isDraggablePiece={({ piece }) => !gameOver && piece[0] === game.turn()}
+          isDraggablePiece={({ piece }) => isPlayersTurn() && piece[0] === playerColor}
           customSquareStyles={squareStyles}
           customLightSquareStyle={LIGHT_SQUARE_STYLE}
           customDarkSquareStyle={DARK_SQUARE_STYLE}
@@ -229,8 +283,31 @@ export default function ChessGame() {
 
         <MoveList moves={moves} />
 
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Play as</span>
+          <div className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+            {(["w", "b"] as const).map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-pressed={playerColor === color}
+                title={`Start a new game as ${color === "w" ? "White" : "Black"}`}
+                onClick={() => newGame(color)}
+                className={cn(
+                  "rounded-md px-3 py-1 text-sm font-medium transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                  playerColor === color
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {color === "w" ? "White" : "Black"}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
-          <Button onClick={newGame}>
+          <Button onClick={() => newGame()}>
             <RefreshCw />
             New game
           </Button>
@@ -244,7 +321,7 @@ export default function ChessGame() {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" size="sm" onClick={undo} disabled={!hasMoves}>
+          <Button variant="outline" size="sm" onClick={undo} disabled={!canUndo}>
             <Undo2 />
             Undo
           </Button>
@@ -263,7 +340,7 @@ export default function ChessGame() {
         result={result}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onNewGame={newGame}
+        onNewGame={() => newGame()}
       />
     </div>
   );
