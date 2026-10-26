@@ -27,8 +27,9 @@ python prepare_data.py data/raw/lichess_elite_2025-06.zip --max-games 20000
 ```
 
 This writes compressed shards to `data/processed/` (`train-*.npz`, `val-*.npz`).
-On a 2020 Intel MacBook it processes ~135 games/s (~11k positions/s), and
-stores ~11 bytes per position, so 20M positions ≈ 230 MB.
+It uses every CPU core (`--workers`, output is identical for any value): on a
+4-core 2020 Intel MacBook ~420 games/s, so one month (~289k games, ~25M
+positions) takes ~12 minutes. Shards take ~11 bytes per position (~275 MB per month).
 Run `python prepare_data.py --help` for the filters (rating, time control, skipped opening plies).
 
 ## Training

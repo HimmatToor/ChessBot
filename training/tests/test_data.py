@@ -6,7 +6,17 @@ import chess.pgn
 import numpy as np
 
 import prepare_data
-from chessnet.data import DRAW, LOSS, WIN, ShardWriter, game_examples, load_shard, pack_planes, unpack_planes
+from chessnet.data import (
+    DRAW,
+    LOSS,
+    WIN,
+    ShardWriter,
+    game_arrays,
+    game_examples,
+    load_shard,
+    pack_planes,
+    unpack_planes,
+)
 from chessnet.encode import MOVES, encode_board
 
 SCHOLARS_MATE = """[Event "Rated Blitz game"]
@@ -79,6 +89,52 @@ def test_accept_game_filters():
     assert accept(make_pgn(time_control="120+2"))  # 120 + 80 = 200 s
     assert not accept(make_pgn(time_control="-"))  # correspondence / unknown
     assert not accept(make_pgn(result="*"))
+
+
+def test_shard_writer_add_packed_splits_exactly(tmp_path):
+    writer = ShardWriter(tmp_path, "train", shard_size=4)
+    for _ in range(3):  # 3 games x 7 positions = 21 -> shards of 4,4,4,4,4,1
+        writer.add_packed(*game_arrays(read(SCHOLARS_MATE)))
+    writer.flush()
+    sizes = [len(load_shard(tmp_path / f"train-{i:04d}.npz")["move"]) for i in range(writer.shards_written)]
+    assert sizes == [4, 4, 4, 4, 4, 1]
+    assert writer.total == writer.positions == 21
+
+
+def test_split_games_handles_blank_lines_and_no_trailing_newline():
+    pgn = SCHOLARS_MATE + "\n\n\n" + make_pgn() + make_pgn().rstrip()
+    texts = list(prepare_data.split_games(io.StringIO(pgn)))
+    assert len(texts) == 3
+    assert [read(t).headers["Result"] for t in texts] == ["1-0", "1-0", "1-0"]
+
+
+def test_parallel_output_is_identical_to_serial(tmp_path):
+    games = []
+    for i in range(300):  # a mix of accepted and rejected games, more than one task's worth
+        games.append(SCHOLARS_MATE if i % 3 == 0 else make_pgn(black_elo=1500 if i % 7 == 0 else 2300))
+    pgn = tmp_path / "games.pgn"
+    pgn.write_text("\n".join(games))
+
+    common = [str(pgn), "--skip-plies", "0", "--shard-size", "100", "--val-every", "10"]
+    prepare_data.main(common + ["--out", str(tmp_path / "serial"), "--workers", "1"])
+    prepare_data.main(common + ["--out", str(tmp_path / "parallel"), "--workers", "3"])
+
+    serial = sorted(p.name for p in (tmp_path / "serial").iterdir())
+    assert serial == sorted(p.name for p in (tmp_path / "parallel").iterdir())
+    assert len(serial) > 5
+    for name in serial:
+        a, b = load_shard(tmp_path / "serial" / name), load_shard(tmp_path / "parallel" / name)
+        for key in a:
+            np.testing.assert_array_equal(a[key], b[key], err_msg=f"{name}:{key}")
+
+
+def test_max_games_stops_early(tmp_path):
+    pgn = tmp_path / "games.pgn"
+    pgn.write_text("\n".join(make_pgn() for _ in range(50)))
+    out = tmp_path / "out"
+    prepare_data.main([str(pgn), "--out", str(out), "--skip-plies", "0", "--max-games", "7", "--workers", "2"])
+    total = sum(len(load_shard(p)["move"]) for p in out.glob("*.npz"))
+    assert total == 7 * 6
 
 
 def test_cli_end_to_end_from_zip(tmp_path):
