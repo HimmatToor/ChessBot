@@ -121,7 +121,11 @@ def main(argv: list[str] | None = None) -> None:
 
     model = ChessNet(MODEL_PRESETS[args.model]).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    # torch.amp.GradScaler is the current API (torch >= 2.3); the local torch 2.2 only has the cuda one.
+    if hasattr(torch.amp, "GradScaler"):
+        scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     step, best_val = 0, float("inf")
 
     if args.resume:

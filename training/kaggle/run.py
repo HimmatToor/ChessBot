@@ -14,17 +14,18 @@ import subprocess
 import sys
 import time
 
+# History: "smoke" = 1,500 steps on a T4: 8.3k positions/s, policy acc 34.6% (2026-10-26).
 RUN = {
-    "name": "smoke",  # output folder name
+    "name": "full-v1",  # output folder name
     "model": "full",
     "batch_size": 1024,
-    "steps": 1500,  # None = use "epochs"
-    "epochs": 1,
+    "steps": None,  # None = use "epochs"
+    "epochs": 4,  # 4 x 24.4M positions at ~8.3k/s ~ 3.3 h
     "lr": 1e-3,
-    "warmup": 300,
-    "eval_every": 500,
+    "warmup": 1000,
+    "eval_every": 2000,
     "max_val": 50_000,
-    "max_hours": 11.0,  # Kaggle stops sessions at 12 h; leave time to export
+    "max_hours": 11.0,  # Kaggle stops sessions at 12 h; stop cleanly before that
 }
 
 REPO = "https://github.com/HimmatToor/ChessBot.git"
