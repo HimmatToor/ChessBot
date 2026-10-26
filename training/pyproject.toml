@@ -1,0 +1,9 @@
+[project]
+name = "chessnet"
+version = "0.1.0"
+description = "Policy/value network for the ChessBot web app"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

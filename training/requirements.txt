@@ -1,0 +1,9 @@
+# Local (Intel Mac, CPU-only) training environment, Python 3.11.
+# torch 2.2.2 is the last release with Intel-macOS wheels and needs numpy < 2.
+# On Kaggle/Colab use the preinstalled torch and just `pip install chess onnx onnxruntime`.
+torch==2.2.2
+numpy==1.26.4
+chess==1.11.2
+onnx==1.17.0
+onnxruntime==1.19.2
+pytest==8.3.3

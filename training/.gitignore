@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Large, regenerable artefacts — never commit these.
+data/
+checkpoints/
+runs/
+*.onnx
