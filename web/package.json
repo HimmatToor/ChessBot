@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "predev": "node scripts/copy-ort-wasm.mjs",
+    "prebuild": "node scripts/copy-ort-wasm.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
@@ -16,6 +18,7 @@
     "lucide-react": "^1.61.0",
     "next": "15.5.4",
     "next-themes": "^0.4.6",
+    "onnxruntime-web": "^1.22.0",
     "radix-ui": "^1.8.1",
     "react": "19.1.0",
     "react-chessboard": "^4.7.3",

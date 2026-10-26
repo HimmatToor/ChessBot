@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Chess, type Color, type Move, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { ArrowDownUp, Check, Copy, Download, RefreshCw, Undo2 } from "lucide-react";
@@ -9,6 +9,7 @@ import GameOverDialog from "@/components/GameOverDialog";
 import MoveList from "@/components/MoveList";
 import PlayerBar from "@/components/PlayerBar";
 import { randomBot, type Bot, type BotMove } from "@/lib/bot";
+import { createNeuralBot } from "@/lib/engine/neuralBot";
 import { gameResult, type GameResult } from "@/lib/gameResult";
 import { exportPgn } from "@/lib/pgn";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ import { playSound, type SoundName } from "@/lib/sounds";
 
 type MoveSquares = { from: Square; to: Square };
 
-const bot: Bot = randomBot;
+const bot: Bot = createNeuralBot();
 // Even an instant bot waits a moment, so its reply doesn't feel jarring.
 const BOT_MIN_DELAY_MS = 400;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,12 +56,18 @@ export default function ChessGame() {
   const [orientation, setOrientation] = useState<"white" | "black">("white");
   const [playerColor, setPlayerColor] = useState<Color>("w");
   const [botThinking, setBotThinking] = useState(false);
+  const [botError, setBotError] = useState<string | null>(null);
   // Bumped whenever the position is reset or taken back, so a bot reply
   // that was still being computed for the old position gets discarded.
   const botToken = useRef(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+
+  // Start downloading the model as soon as the page loads, not on the first bot move.
+  useEffect(() => {
+    bot.prepare?.().catch(() => {}); // a failure resurfaces (and is handled) on the bot's move
+  }, []);
 
   const legalMovesFrom = (square: Square) => game.moves({ square, verbose: true });
 
@@ -99,7 +106,15 @@ export default function ChessGame() {
   async function playBotMove() {
     const token = ++botToken.current;
     setBotThinking(true);
-    const [move] = await Promise.all([bot.chooseMove(game.fen()), delay(BOT_MIN_DELAY_MS)]);
+    let move: BotMove;
+    try {
+      [move] = await Promise.all([bot.chooseMove(game), delay(BOT_MIN_DELAY_MS)]);
+    } catch (error) {
+      // e.g. the model failed to download: keep the game going rather than freezing.
+      console.error("ChessBot engine failed; falling back to random moves", error);
+      setBotError("The ChessBot engine couldn't load, so it's playing random moves.");
+      move = await randomBot.chooseMove(game);
+    }
     if (token !== botToken.current) return; // position changed while thinking
     setBotThinking(false);
     applyMove(move);
@@ -279,6 +294,7 @@ export default function ChessGame() {
           >
             {status}
           </p>
+          {botError && <p className="mt-1 text-sm text-destructive">{botError}</p>}
         </div>
 
         <MoveList moves={moves} />
