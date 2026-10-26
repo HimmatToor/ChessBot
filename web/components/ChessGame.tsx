@@ -3,12 +3,13 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { Chess, type Move, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { ArrowDownUp, RefreshCw } from "lucide-react";
+import { ArrowDownUp, Check, Copy, Download, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GameOverDialog from "@/components/GameOverDialog";
 import MoveList from "@/components/MoveList";
 import PlayerBar from "@/components/PlayerBar";
 import { gameResult, type GameResult } from "@/lib/gameResult";
+import { exportPgn } from "@/lib/pgn";
 import { cn } from "@/lib/utils";
 import { materialBalance } from "@/lib/material";
 import { playSound, type SoundName } from "@/lib/sounds";
@@ -48,6 +49,7 @@ export default function ChessGame() {
   const [orientation, setOrientation] = useState<"white" | "black">("white");
   const [dialogOpen, setDialogOpen] = useState(false);
   const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   const legalMovesFrom = (square: Square) => game.moves({ square, verbose: true });
 
@@ -106,6 +108,37 @@ export default function ChessGame() {
     }
   }
 
+  function undo() {
+    if (!game.undo()) return;
+    if (dialogTimer.current) clearTimeout(dialogTimer.current);
+    setDialogOpen(false);
+    const previous = game.history({ verbose: true }).at(-1);
+    setLastMove(previous ? { from: previous.from, to: previous.to } : null);
+    setFen(game.fen());
+    setSelected(null);
+    setPendingPromotion(null);
+  }
+
+  async function copyPgn() {
+    try {
+      await navigator.clipboard.writeText(exportPgn(game));
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed"); // clipboard needs a secure context + permission
+    }
+    setTimeout(() => setCopyState("idle"), 2000);
+  }
+
+  function downloadPgn() {
+    const blob = new Blob([exportPgn(game)], { type: "application/x-chess-pgn" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `chessbot-${new Date().toISOString().slice(0, 10)}.pgn`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   function newGame() {
     if (dialogTimer.current) clearTimeout(dialogTimer.current);
     setDialogOpen(false);
@@ -138,6 +171,8 @@ export default function ChessGame() {
   const gameOver = game.isGameOver();
   const result = gameResult(game);
   const status = statusText(game, result);
+  const moves = game.history();
+  const hasMoves = moves.length > 0;
   const material = materialBalance(game.board());
   const playerBar = (color: "w" | "b") => (
     <PlayerBar
@@ -192,7 +227,7 @@ export default function ChessGame() {
           </p>
         </div>
 
-        <MoveList moves={game.history()} />
+        <MoveList moves={moves} />
 
         <div className="grid grid-cols-2 gap-2">
           <Button onClick={newGame}>
@@ -205,6 +240,21 @@ export default function ChessGame() {
           >
             <ArrowDownUp />
             Flip board
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant="outline" size="sm" onClick={undo} disabled={!hasMoves}>
+            <Undo2 />
+            Undo
+          </Button>
+          <Button variant="outline" size="sm" onClick={copyPgn} disabled={!hasMoves}>
+            {copyState === "copied" ? <Check /> : <Copy />}
+            {copyState === "copied" ? "Copied" : copyState === "failed" ? "Failed" : "PGN"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={downloadPgn} disabled={!hasMoves}>
+            <Download />
+            .pgn
           </Button>
         </div>
       </aside>
