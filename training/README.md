@@ -31,6 +31,17 @@ On a 2020 Intel MacBook it processes ~135 games/s (~11k positions/s), and
 stores ~11 bytes per position, so 20M positions ≈ 230 MB.
 Run `python prepare_data.py --help` for the filters (rating, time control, skipped opening plies).
 
+## Training
+
+```bash
+python train.py --model tiny --batch-size 256 --epochs 1 --out checkpoints/tiny-cpu   # ~6 min on CPU
+```
+
+Prints validation move-prediction accuracy and win/draw/loss accuracy every
+`--eval-every` steps and saves `latest.pt`, `best.pt` and `metrics.csv` to `--out`.
+Resume an interrupted run with `--resume checkpoints/<run>/latest.pt`.
+`--model full` is the 10×128 network meant for a GPU.
+
 ## Layout
 
 | Path | Purpose |
