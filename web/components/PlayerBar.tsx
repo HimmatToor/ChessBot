@@ -22,7 +22,8 @@ export default function PlayerBar({ name, color, isTurn, material }: PlayerBarPr
     >
       <span
         className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-md text-xl leading-none",
+          // The ring keeps the black badge visible on the dark theme's card.
+          "flex size-8 shrink-0 items-center justify-center rounded-md text-xl leading-none ring-1 ring-foreground/20",
           color === "w" ? "bg-white text-slate-900" : "bg-slate-900 text-white",
         )}
         aria-hidden

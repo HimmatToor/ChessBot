@@ -1,4 +1,5 @@
-// The neural-network bot: a Bot whose moves come from engine.worker.ts.
+// The neural-network engine: one Web Worker (one model download) shared by
+// a Bot per difficulty level.
 
 import type { Chess } from "chess.js";
 import type { Bot, BotMove } from "@/lib/bot";
@@ -9,7 +10,14 @@ const WASM_PATHS = "/ort/";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-export function createNeuralBot(settings: SearchSettings, name = "ChessBot"): Bot {
+export type Engine = {
+  /** Starts loading the model; safe to call repeatedly. */
+  prepare(): Promise<unknown>;
+  /** A Bot that searches with these settings. */
+  bot(settings: SearchSettings, name: string): Bot;
+};
+
+export function createEngine(): Engine {
   let worker: Worker | null = null;
   let ready: Promise<unknown> | null = null;
   let nextId = 0;
@@ -48,19 +56,22 @@ export function createNeuralBot(settings: SearchSettings, name = "ChessBot"): Bo
   }
 
   return {
-    name,
     prepare,
-    async chooseMove(game: Chess): Promise<BotMove> {
-      // Snapshot the moves before awaiting: the caller's game object may change meanwhile.
-      const moves = game.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion ?? ""));
-      await prepare();
-      const best = await request({ type: "search", moves, settings });
-      if (!best) throw new Error("engine returned no move");
-      console.debug(
-        `[ChessBot] ${best.simulations} simulations in ${best.timeMs} ms, ` +
-          `eval ${best.value.toFixed(2)}, line ${best.pv.join(" ")}`,
-      );
-      return best.move;
-    },
+    bot: (settings, name) => ({
+      name,
+      prepare,
+      async chooseMove(game: Chess): Promise<BotMove> {
+        // Snapshot the moves before awaiting: the caller's game object may change meanwhile.
+        const moves = game.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion ?? ""));
+        await prepare();
+        const best = await request({ type: "search", moves, settings });
+        if (!best) throw new Error("engine returned no move");
+        console.debug(
+          `[${name}] ${best.simulations} simulations in ${best.timeMs} ms, ` +
+            `eval ${best.value.toFixed(2)}, line ${best.pv.join(" ")}`,
+        );
+        return best.move;
+      },
+    }),
   };
 }

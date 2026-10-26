@@ -6,6 +6,7 @@ import { Chess } from "chess.js";
 import { search } from "./mcts";
 import { Network } from "./network";
 import type { BestMove, WorkerRequest, WorkerResponse } from "./protocol";
+import { pickMove } from "./selection";
 
 let network: Promise<Network> | null = null;
 
@@ -24,10 +25,15 @@ async function handle(request: WorkerRequest): Promise<BestMove | null> {
       for (const uci of request.moves) {
         game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
       }
+      const { settings } = request;
       const start = performance.now();
-      const result = await search(game, (planes, batch) => net.evaluate(planes, batch), request.settings);
+      const result = await search(game, (planes, batch) => net.evaluate(planes, batch), settings);
+      const chosen =
+        Math.random() < (settings.randomMoveChance ?? 0)
+          ? result.candidates[Math.floor(Math.random() * result.candidates.length)]
+          : pickMove(result.candidates, settings.temperature ?? 0);
       return {
-        move: result.move,
+        move: chosen.move,
         value: result.value,
         pv: result.pv,
         simulations: result.simulations,

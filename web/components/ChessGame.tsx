@@ -9,7 +9,9 @@ import GameOverDialog from "@/components/GameOverDialog";
 import MoveList from "@/components/MoveList";
 import PlayerBar from "@/components/PlayerBar";
 import { randomBot, type Bot, type BotMove } from "@/lib/bot";
-import { createNeuralBot } from "@/lib/engine/neuralBot";
+import { DEFAULT_LEVEL, LEVELS, levelById, type LevelId } from "@/lib/engine/levels";
+import { createEngine } from "@/lib/engine/neuralBot";
+import SegmentedControl from "@/components/SegmentedControl";
 import { gameResult, type GameResult } from "@/lib/gameResult";
 import { exportPgn } from "@/lib/pgn";
 import { cn } from "@/lib/utils";
@@ -18,8 +20,11 @@ import { playSound, type SoundName } from "@/lib/sounds";
 
 type MoveSquares = { from: Square; to: Square };
 
-// Difficulty levels come in the next step; until then one fixed search budget.
-const bot: Bot = createNeuralBot({ simulations: 400, timeLimitMs: 3000 });
+// One engine (one worker, one model download) shared by a bot per level.
+const engine = createEngine();
+const BOTS = Object.fromEntries(
+  LEVELS.map((l) => [l.id, engine.bot(l.settings, `ChessBot · ${l.label}`)]),
+) as Record<LevelId, Bot>;
 // Even an instant bot waits a moment, so its reply doesn't feel jarring.
 const BOT_MIN_DELAY_MS = 400;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,6 +61,8 @@ export default function ChessGame() {
   const [pendingPromotion, setPendingPromotion] = useState<MoveSquares | null>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
   const [playerColor, setPlayerColor] = useState<Color>("w");
+  const [level, setLevel] = useState<LevelId>(DEFAULT_LEVEL);
+  const bot = BOTS[level];
   const [botThinking, setBotThinking] = useState(false);
   const [botError, setBotError] = useState<string | null>(null);
   // Bumped whenever the position is reset or taken back, so a bot reply
@@ -67,7 +74,7 @@ export default function ChessGame() {
 
   // Start downloading the model as soon as the page loads, not on the first bot move.
   useEffect(() => {
-    bot.prepare?.().catch(() => {}); // a failure resurfaces (and is handled) on the bot's move
+    engine.prepare().catch(() => {}); // a failure resurfaces (and is handled) on the bot's move
   }, []);
 
   const legalMovesFrom = (square: Square) => game.moves({ square, verbose: true });
@@ -104,12 +111,14 @@ export default function ChessGame() {
     return move !== null;
   }
 
-  async function playBotMove() {
+  // `activeBot` defaults to the current level; newGame passes the new one
+  // explicitly because state updates haven't been applied yet at that point.
+  async function playBotMove(activeBot: Bot = bot) {
     const token = ++botToken.current;
     setBotThinking(true);
     let move: BotMove;
     try {
-      [move] = await Promise.all([bot.chooseMove(game), delay(BOT_MIN_DELAY_MS)]);
+      [move] = await Promise.all([activeBot.chooseMove(game), delay(BOT_MIN_DELAY_MS)]);
     } catch (error) {
       // e.g. the model failed to download: keep the game going rather than freezing.
       console.error("ChessBot engine failed; falling back to random moves", error);
@@ -204,7 +213,7 @@ export default function ChessGame() {
     URL.revokeObjectURL(url);
   }
 
-  function newGame(color: Color = playerColor) {
+  function newGame(color: Color = playerColor, newLevel: LevelId = level) {
     cancelBot();
     closeDialog();
     game.reset();
@@ -213,8 +222,9 @@ export default function ChessGame() {
     setLastMove(null);
     setPendingPromotion(null);
     setPlayerColor(color);
+    setLevel(newLevel);
     setOrientation(color === "w" ? "white" : "black");
-    if (color === "b") void playBotMove(); // bot opens as White
+    if (color === "b") void playBotMove(BOTS[newLevel]); // bot opens as White
   }
 
   const squareStyles: Record<string, CSSProperties> = {};
@@ -300,56 +310,54 @@ export default function ChessGame() {
 
         <MoveList moves={moves} />
 
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Play as</span>
-          <div className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-            {(["w", "b"] as const).map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-pressed={playerColor === color}
-                title={`Start a new game as ${color === "w" ? "White" : "Black"}`}
-                onClick={() => newGame(color)}
-                className={cn(
-                  "rounded-md px-3 py-1 text-sm font-medium transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-                  playerColor === color
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {color === "w" ? "White" : "Black"}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <SegmentedControl
+            label="Play as"
+            value={playerColor}
+            onChange={(color) => newGame(color, level)}
+            options={[
+              { value: "w", label: "White", title: "Start a new game as White" },
+              { value: "b", label: "Black", title: "Start a new game as Black" },
+            ]}
+          />
+          <SegmentedControl
+            label="Level"
+            value={level}
+            onChange={(id) => newGame(playerColor, id)}
+            options={LEVELS.map((l) => ({ value: l.id, label: l.label, title: `Start a new ${l.label} game` }))}
+          />
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {levelById(level).description}. Changing colour or level starts a new game.
+          </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Button onClick={() => newGame()}>
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <Button onClick={() => newGame()} className="w-full">
             <RefreshCw />
             New game
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
-          >
-            <ArrowDownUp />
-            Flip board
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" size="sm" onClick={undo} disabled={!canUndo}>
-            <Undo2 />
-            Undo
-          </Button>
-          <Button variant="outline" size="sm" onClick={copyPgn} disabled={!hasMoves}>
-            {copyState === "copied" ? <Check /> : <Copy />}
-            {copyState === "copied" ? "Copied" : copyState === "failed" ? "Failed" : "PGN"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={downloadPgn} disabled={!hasMoves}>
-            <Download />
-            .pgn
-          </Button>
+          {/* Two per row so every label fits, including "Copied" feedback. */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={undo} disabled={!canUndo}>
+              <Undo2 />
+              Undo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
+            >
+              <ArrowDownUp />
+              Flip board
+            </Button>
+            <Button variant="outline" onClick={copyPgn} disabled={!hasMoves}>
+              {copyState === "copied" ? <Check /> : <Copy />}
+              {copyState === "copied" ? "Copied!" : copyState === "failed" ? "Copy failed" : "Copy PGN"}
+            </Button>
+            <Button variant="outline" onClick={downloadPgn} disabled={!hasMoves}>
+              <Download />
+              Download
+            </Button>
+          </div>
         </div>
       </aside>
 

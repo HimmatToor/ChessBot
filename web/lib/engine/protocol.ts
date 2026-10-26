@@ -6,6 +6,10 @@ export type SearchSettings = {
   /** 1 = play the network's favourite move without searching. */
   simulations: number;
   timeLimitMs?: number;
+  /** 0 = always the best move; higher = more varied (see selection.ts). */
+  temperature?: number;
+  /** Chance (0..1) of ignoring the search and playing a random legal move. */
+  randomMoveChance?: number;
 };
 
 export type WorkerRequest =
