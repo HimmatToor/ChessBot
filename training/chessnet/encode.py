@@ -32,6 +32,9 @@ import numpy as np
 
 NUM_PLANES = 18
 NUM_MOVES = 1858
+#: Bump whenever planes or the move table change; stored in exported models
+#: so the browser can refuse a model built for a different encoding.
+ENCODING_VERSION = 1
 
 _PIECE_ORDER = [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING]
 _UNDERPROMOTIONS = [chess.KNIGHT, chess.BISHOP, chess.ROOK]

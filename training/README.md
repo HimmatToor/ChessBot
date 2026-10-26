@@ -42,6 +42,15 @@ Prints validation move-prediction accuracy and win/draw/loss accuracy every
 Resume an interrupted run with `--resume checkpoints/<run>/latest.pt`.
 `--model full` is the 10×128 network meant for a GPU.
 
+## Exporting for the website
+
+```bash
+python export_onnx.py checkpoints/tiny-cpu/best.pt   # -> ../web/public/models/chessnet.onnx
+```
+
+Stores weights as float16 (tiny model 2 MB, full model 14 MB, under Cloudflare
+Pages' 25 MB file limit) and checks onnxruntime's output against PyTorch.
+
 ## Layout
 
 | Path | Purpose |
