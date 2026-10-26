@@ -1,7 +1,7 @@
 """Kaggle training job for ChessBot (pushed with `kaggle kernels push -p training/kaggle`).
 
-Clones the repo, trains on the attached dataset, exports chessnet.onnx.
-Everything left in /kaggle/working becomes the run's downloadable output.
+Clones the repo and trains on the attached dataset. Everything left in
+/kaggle/working (checkpoints, metrics.csv) becomes the run's downloadable output.
 
 Edit RUN below for each run; the git history then records every config.
 For a local dry run (CPU, tiny model) see training/README.md.
@@ -69,8 +69,9 @@ def main():
         shutil.rmtree(repo, ignore_errors=True)
         sh("git", "clone", "--depth", "1", REPO, repo)
         sh("git", "log", "-1", "--format=commit %h %s", cwd=repo)
-        # torch and numpy come with the Kaggle image; add the rest.
-        sh(sys.executable, "-m", "pip", "install", "-q", "chess==1.11.2", "onnx==1.17.0", "onnxruntime==1.19.2")
+        # torch and numpy come with the Kaggle image. Only training runs here; ONNX
+        # export happens locally with the pinned, tested toolchain (export_onnx.py).
+        sh(sys.executable, "-m", "pip", "install", "-q", "chess==1.11.2")
     training = os.path.join(repo, "training")
 
     data = find_data_dir()
@@ -89,10 +90,8 @@ def main():
     if os.path.exists(resume):
         args += ["--resume", resume]
     sh(*args, cwd=training)
-
-    sh(sys.executable, "export_onnx.py", os.path.join(out, "best.pt"), "--out", os.path.join(WORK, "chessnet.onnx"),
-       cwd=training)
-    print(f"total time {(time.time() - start) / 60:.1f} min", flush=True)
+    print(f"total time {(time.time() - start) / 60:.1f} min. Download {out}/best.pt and run export_onnx.py locally.",
+          flush=True)
 
 
 if __name__ == "__main__":

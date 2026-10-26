@@ -21,7 +21,9 @@ def save_checkpoint(path: Path, model: ChessNet, **extra: Any) -> None:
 
 def load_checkpoint(path: Path, device: str | torch.device = "cpu") -> tuple[ChessNet, dict[str, Any]]:
     """Returns (model in eval mode, the full checkpoint dict)."""
-    checkpoint = torch.load(path, map_location=device)
+    # Our own files, which also hold the optimiser state and run settings, so not
+    # weights-only (newer torch defaults to weights_only=True and would refuse them).
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
     model = ChessNet(ModelConfig(**checkpoint["config"])).to(device)
     model.load_state_dict(checkpoint["model"])
     return model.eval(), checkpoint

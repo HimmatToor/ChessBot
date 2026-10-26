@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> None:
     step, best_val = 0, float("inf")
 
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location=device)
+        checkpoint = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         step, best_val = checkpoint["step"], checkpoint["best_val"]
@@ -144,7 +144,9 @@ def main(argv: list[str] | None = None) -> None:
                          "val_policy_acc", "val_value_acc", "positions_per_s"])
 
     def checkpoint_extra() -> dict:
-        return {"optimizer": optimizer.state_dict(), "step": step, "best_val": best_val, "args": vars(args)}
+        # Paths stored as strings: plain types load the same in every torch/Python version.
+        run_args = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
+        return {"optimizer": optimizer.state_dict(), "step": step, "best_val": best_val, "args": run_args}
 
     model.train()
     order = rng.permutation(len(train_data))

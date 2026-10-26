@@ -46,8 +46,9 @@ Resume an interrupted run with `--resume checkpoints/<run>/latest.pt`.
 ## Training on Kaggle (free GPU)
 
 `kaggle/run.py` is a Kaggle script job: it clones this repo from GitHub (so
-**push your commits first**), trains on the attached dataset and exports
-`chessnet.onnx`. Its settings live in the `RUN` dict at the top; the dataset and
+**push your commits first**) and trains on the attached dataset. Export the
+downloaded `best.pt` locally with `export_onnx.py` (Kaggle's newer torch uses a
+different ONNX exporter; the local pinned toolchain is the tested one). Its settings live in the `RUN` dict at the top; the dataset and
 GPU type in `kaggle/kernel-metadata.json`.
 
 ```bash
