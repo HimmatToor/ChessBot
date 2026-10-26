@@ -4,6 +4,7 @@ import zipfile
 import chess
 import chess.pgn
 import numpy as np
+import torch
 
 import prepare_data
 from chessnet.data import (
@@ -16,6 +17,7 @@ from chessnet.data import (
     load_shard,
     pack_planes,
     unpack_planes,
+    unpack_planes_torch,
 )
 from chessnet.encode import MOVES, encode_board
 
@@ -46,6 +48,14 @@ def test_pack_round_trip():
     packed = pack_planes(planes)
     assert packed.shape == (2, 144)
     np.testing.assert_array_equal(unpack_planes(packed), planes)
+
+
+def test_torch_unpack_matches_numpy():
+    rng = np.random.default_rng(0)
+    packed = rng.integers(0, 256, size=(37, 144), dtype=np.uint8)
+    unpacked = unpack_planes_torch(torch.from_numpy(packed))
+    assert unpacked.dtype == torch.float32 and unpacked.shape == (37, 18, 8, 8)
+    np.testing.assert_array_equal(unpacked.numpy(), unpack_planes(packed).astype(np.float32))
 
 
 def test_game_examples_results_are_from_side_to_move():

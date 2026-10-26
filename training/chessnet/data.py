@@ -14,6 +14,7 @@ from pathlib import Path
 import chess
 import chess.pgn
 import numpy as np
+import torch
 
 from chessnet.encode import NUM_PLANES, encode_board, encode_move
 
@@ -31,6 +32,19 @@ def pack_planes(planes: np.ndarray) -> np.ndarray:
 def unpack_planes(packed: np.ndarray) -> np.ndarray:
     """(N, 144) uint8 -> (N, 18, 8, 8) 0/1 uint8."""
     return np.unpackbits(packed, axis=1).reshape(-1, NUM_PLANES, 8, 8)
+
+
+_BIT_SHIFTS = torch.arange(7, -1, -1, dtype=torch.uint8)
+
+
+def unpack_planes_torch(packed: torch.Tensor) -> torch.Tensor:
+    """(N, 144) uint8 tensor -> (N, 18, 8, 8) float32 on the same device.
+
+    Same bit order as np.unpackbits (most significant bit first). Lets the
+    trainer send packed bytes to the GPU (8x less transfer) and unpack there.
+    """
+    bits = (packed.unsqueeze(-1) >> _BIT_SHIFTS.to(packed.device)) & 1
+    return bits.reshape(len(packed), NUM_PLANES, 8, 8).float()
 
 
 def game_examples(game: chess.pgn.Game, skip_plies: int = 0) -> Iterator[tuple[np.ndarray, int, int]]:

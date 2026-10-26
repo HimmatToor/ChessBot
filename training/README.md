@@ -43,6 +43,26 @@ Prints validation move-prediction accuracy and win/draw/loss accuracy every
 Resume an interrupted run with `--resume checkpoints/<run>/latest.pt`.
 `--model full` is the 10×128 network meant for a GPU.
 
+## Training on Kaggle (free GPU)
+
+`kaggle/run.py` is a Kaggle script job: it clones this repo from GitHub (so
+**push your commits first**), trains on the attached dataset and exports
+`chessnet.onnx`. Its settings live in the `RUN` dict at the top; the dataset and
+GPU type in `kaggle/kernel-metadata.json`.
+
+```bash
+kaggle kernels push -p kaggle                    # starts a run (new version)
+kaggle kernels status himmattoor/chessbot-train  # queued / running / complete / error
+kaggle kernels output himmattoor/chessbot-train -p runs/latest   # log + checkpoints + onnx
+```
+
+Dry-run the script locally (CPU, after shrinking `RUN` to the tiny model):
+
+```bash
+CHESSBOT_INPUT=data CHESSBOT_WORK=/tmp/kaggle-work CHESSBOT_REPO=$PWD/.. \
+  CHESSBOT_REQUIRE_GPU=0 python kaggle/run.py
+```
+
 ## Exporting for the website
 
 ```bash

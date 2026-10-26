@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 
 from chessnet.checkpoint import save_checkpoint
-from chessnet.data import load_shard, unpack_planes
+from chessnet.data import load_shard, unpack_planes_torch
 from chessnet.model import ChessNet, ModelConfig, count_parameters
 
 MODEL_PRESETS = {"tiny": ModelConfig.tiny(), "full": ModelConfig()}
@@ -44,7 +44,8 @@ class InMemoryData:
         return len(self.move)
 
     def batch(self, indices: np.ndarray, device: torch.device) -> tuple[torch.Tensor, ...]:
-        planes = torch.from_numpy(unpack_planes(self.planes[indices])).to(device).float()
+        # Ship the packed bytes and unpack on the device: 8x less host->GPU traffic.
+        planes = unpack_planes_torch(torch.from_numpy(self.planes[indices]).to(device))
         move = torch.from_numpy(self.move[indices]).to(device)
         result = torch.from_numpy(self.result[indices]).to(device)
         return planes, move, result
@@ -99,6 +100,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--max-train", type=int, default=None, help="use only the first N training positions")
     parser.add_argument("--max-val", type=int, default=50_000)
     parser.add_argument("--resume", type=Path, default=None)
+    parser.add_argument("--max-hours", type=float, default=None,
+                        help="stop cleanly (evaluate + save) after this long, e.g. before Kaggle's 12 h limit")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
@@ -107,6 +110,9 @@ def main(argv: list[str] | None = None) -> None:
     rng = np.random.default_rng(args.seed)
     device = pick_device(args.device)
     use_amp = device.type == "cuda"
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True  # input shape never changes, so let cuDNN pick the fastest kernels
+        print(f"GPU: {torch.cuda.get_device_name(device)}")
 
     train_data = InMemoryData(sorted(args.data.glob("train-*.npz")), args.max_train)
     val_data = InMemoryData(sorted(args.data.glob("val-*.npz")), args.max_val)
@@ -143,7 +149,9 @@ def main(argv: list[str] | None = None) -> None:
     model.train()
     order = rng.permutation(len(train_data))
     cursor = (step * args.batch_size) % len(train_data)
-    running_loss, running_n, last_time = 0.0, 0, time.time()
+    # Accumulated on the device: calling loss.item() every step would make the CPU wait for the GPU.
+    running_loss, running_n, last_time = torch.zeros((), device=device), 0, time.time()
+    deadline = time.time() + args.max_hours * 3600 if args.max_hours is not None else None
 
     while step < total_steps:
         if cursor + args.batch_size > len(train_data):  # new epoch
@@ -164,17 +172,19 @@ def main(argv: list[str] | None = None) -> None:
         scaler.update()
 
         step += 1
-        running_loss += loss.item()
+        running_loss += loss.detach().float()
         running_n += 1
+        out_of_time = deadline is not None and time.time() > deadline
 
-        if step % args.eval_every == 0 or step == total_steps:
+        if step % args.eval_every == 0 or step == total_steps or out_of_time:
+            train_loss = running_loss.item() / running_n  # also waits for the GPU, so the timing below is honest
             speed = running_n * args.batch_size / (time.time() - last_time)
             val = evaluate(model, val_data, device, args.batch_size * 4)
             val_loss = val["policy_loss"] + args.value_weight * val["value_loss"]
-            print(f"step {step:>7,}/{total_steps:,}  lr {lr:.2e}  train {running_loss / running_n:.3f}  "
+            print(f"step {step:>7,}/{total_steps:,}  lr {lr:.2e}  train {train_loss:.3f}  "
                   f"val policy {val['policy_loss']:.3f} (acc {val['policy_acc']:.1%})  "
                   f"value {val['value_loss']:.3f} (acc {val['value_acc']:.1%})  {speed:,.0f} pos/s", flush=True)
-            writer.writerow([step, f"{lr:.6g}", f"{running_loss / running_n:.4f}",
+            writer.writerow([step, f"{lr:.6g}", f"{train_loss:.4f}",
                              *(f"{val[k]:.4f}" for k in ("policy_loss", "value_loss", "policy_acc", "value_acc")),
                              f"{speed:.0f}"])
             log.flush()
@@ -183,7 +193,12 @@ def main(argv: list[str] | None = None) -> None:
                 best_val = val_loss
                 save_checkpoint(args.out / "best.pt", model, **checkpoint_extra())
             save_checkpoint(args.out / "latest.pt", model, **checkpoint_extra())
-            running_loss, running_n, last_time = 0.0, 0, time.time()
+            running_loss, running_n, last_time = torch.zeros((), device=device), 0, time.time()
+
+            if out_of_time:
+                print(f"stopping at step {step:,}: --max-hours {args.max_hours} reached "
+                      f"(resume with --resume {args.out / 'latest.pt'})")
+                break
 
     log.close()
     print(f"done. best validation loss {best_val:.3f}; checkpoints in {args.out}")

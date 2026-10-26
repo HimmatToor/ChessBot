@@ -50,6 +50,16 @@ def test_training_learns_and_writes_checkpoints(shards, tmp_path):
     assert policy.shape == (1, 1858) and wdl.shape == (1, 3)
 
 
+def test_max_hours_stops_cleanly_with_a_checkpoint(shards, tmp_path):
+    out = tmp_path / "run"
+    train.main(["--data", str(shards), "--out", str(out), "--model", "tiny", "--batch-size", "32",
+                "--steps", "100000", "--eval-every", "100000", "--max-hours", "0", "--device", "cpu"])
+    rows = read_metrics(out / "metrics.csv")
+    assert [int(r["step"]) for r in rows] == [1]  # stopped after the first step, with an eval
+    _, checkpoint = load_checkpoint(out / "latest.pt")
+    assert checkpoint["step"] == 1
+
+
 def test_resume_continues_from_saved_step(shards, tmp_path):
     out = tmp_path / "run"
     common = ["--data", str(shards), "--out", str(out), "--model", "tiny", "--batch-size", "32",
