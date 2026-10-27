@@ -1,0 +1,7 @@
+# Cloudflare Pages response headers (https://developers.cloudflare.com/pages/configuration/headers/).
+# Cross-origin isolation lets onnxruntime-web use SharedArrayBuffer, i.e. run the
+# network on several CPU threads. It also means every resource the page loads must
+# be same-origin (it is: fonts, model and wasm are all self-hosted).
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

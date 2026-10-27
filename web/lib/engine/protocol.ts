@@ -13,7 +13,8 @@ export type SearchSettings = {
 };
 
 export type WorkerRequest =
-  | { id: number; type: "init"; modelUrl: string; wasmPaths: string }
+  /** `numThreads` overrides the automatic choice (see defaultThreadCount). */
+  | { id: number; type: "init"; modelUrl: string; wasmPaths: string; numThreads?: number }
   /** `moves` is the game so far in UCI (e.g. "e2e4", "e7e8q") from the standard start. */
   | { id: number; type: "search"; moves: string[]; settings: SearchSettings };
 
@@ -25,6 +26,8 @@ export type BestMove = {
   pv: string[];
   simulations: number;
   timeMs: number;
+  /** CPU threads the network ran on. */
+  threads: number;
 };
 
 export type WorkerResponse =

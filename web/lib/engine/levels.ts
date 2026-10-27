@@ -28,15 +28,15 @@ export const LEVELS: Level[] = [
   {
     id: "hard",
     label: "Hard",
-    description: "Searches 150 positions and plays its best move",
-    // Sized for the 10x128 model on single-threaded WASM (~19 ms per simulation).
-    settings: { simulations: 150, timeLimitMs: 4000, temperature: 0 },
+    description: "Searches 200 positions and plays its best move",
+    // Sized for the 10x128 model: ~13 ms per simulation multi-threaded, ~25 ms on one thread.
+    settings: { simulations: 200, timeLimitMs: 4000, temperature: 0 },
   },
   {
     id: "max",
     label: "Max",
-    description: "Thinks for 6 seconds every move",
-    settings: { simulations: 1_000_000, timeLimitMs: 6000, temperature: 0 },
+    description: "Thinks for 5 seconds every move",
+    settings: { simulations: 1_000_000, timeLimitMs: 5000, temperature: 0 },
   },
 ];
 

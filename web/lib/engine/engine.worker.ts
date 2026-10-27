@@ -4,16 +4,21 @@
 
 import { Chess } from "chess.js";
 import { search } from "./mcts";
-import { Network } from "./network";
+import { defaultThreadCount, Network } from "./network";
 import type { BestMove, WorkerRequest, WorkerResponse } from "./protocol";
 import { pickMove } from "./selection";
 
 let network: Promise<Network> | null = null;
+let threads = 1;
 
 async function handle(request: WorkerRequest): Promise<BestMove | null> {
   switch (request.type) {
     case "init":
-      network ??= Network.load(request.modelUrl, { wasmPaths: request.wasmPaths });
+      if (!network) {
+        // An explicit count (e.g. ?threads=N for benchmarking) still needs isolation to work.
+        threads = self.crossOriginIsolated ? (request.numThreads ?? defaultThreadCount()) : 1;
+        network = Network.load(request.modelUrl, { wasmPaths: request.wasmPaths, numThreads: threads });
+      }
       await network;
       return null;
 
@@ -38,6 +43,7 @@ async function handle(request: WorkerRequest): Promise<BestMove | null> {
         pv: result.pv,
         simulations: result.simulations,
         timeMs: Math.round(performance.now() - start),
+        threads,
       };
     }
   }

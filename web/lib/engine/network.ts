@@ -14,7 +14,23 @@ export type NetworkOutput = {
 export type LoadOptions = {
   /** Where ort-wasm-simd-threaded.{mjs,wasm} are served from, e.g. "/ort/". */
   wasmPaths?: string;
+  /** CPU threads for inference. >1 only works when the page is cross-origin isolated. */
+  numThreads?: number;
 };
+
+/**
+ * Threads to use in this context: about one per physical core (half the logical
+ * cores), capped at 4, when the page is cross-origin isolated (see
+ * public/_headers); otherwise 1, since onnxruntime can't share memory between
+ * threads without isolation. Measured on a 4-core/8-thread laptop: 1 thread
+ * 25 ms/simulation, 2-4 threads 12-15 ms, but 8 threads 59 ms (the inference
+ * threads fight the search and the page for the same cores).
+ */
+export function defaultThreadCount(): number {
+  if (typeof globalThis.crossOriginIsolated === "undefined" || !globalThis.crossOriginIsolated) return 1;
+  const logical = globalThis.navigator?.hardwareConcurrency ?? 1;
+  return Math.max(1, Math.min(4, Math.floor(logical / 2)));
+}
 
 export class Network {
   private constructor(private readonly session: ort.InferenceSession) {}
@@ -22,8 +38,7 @@ export class Network {
   /** `model` is a URL or the .onnx file's bytes. */
   static async load(model: string | Uint8Array, options: LoadOptions = {}): Promise<Network> {
     if (options.wasmPaths) ort.env.wasm.wasmPaths = options.wasmPaths;
-    // Multi-threading needs cross-origin isolation headers; stay single-threaded for now.
-    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.numThreads = options.numThreads ?? 1;
     // Two calls because create() has separate URL and bytes overloads.
     const session =
       typeof model === "string"

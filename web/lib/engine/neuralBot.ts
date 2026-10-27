@@ -10,6 +10,12 @@ const WASM_PATHS = "/ort/";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+/** `?threads=N` in the page URL forces a thread count (for benchmarking); otherwise automatic. */
+function threadOverride(): number | undefined {
+  const n = Number(new URLSearchParams(globalThis.location?.search ?? "").get("threads"));
+  return Number.isInteger(n) && n >= 1 && n <= 16 ? n : undefined;
+}
+
 export type Engine = {
   /** Starts loading the model; safe to call repeatedly. */
   prepare(): Promise<unknown>;
@@ -48,7 +54,12 @@ export function createEngine(): Engine {
   }
 
   function prepare(): Promise<unknown> {
-    ready ??= request({ type: "init", modelUrl: MODEL_URL, wasmPaths: WASM_PATHS }).catch((error) => {
+    ready ??= request({
+      type: "init",
+      modelUrl: MODEL_URL,
+      wasmPaths: WASM_PATHS,
+      numThreads: threadOverride(),
+    }).catch((error) => {
       ready = null; // allow a retry on the next move
       throw error;
     });
@@ -67,7 +78,7 @@ export function createEngine(): Engine {
         const best = await request({ type: "search", moves, settings });
         if (!best) throw new Error("engine returned no move");
         console.debug(
-          `[${name}] ${best.simulations} simulations in ${best.timeMs} ms, ` +
+          `[${name}] ${best.simulations} simulations in ${best.timeMs} ms on ${best.threads} thread(s), ` +
             `eval ${best.value.toFixed(2)}, line ${best.pv.join(" ")}`,
         );
         return best.move;
