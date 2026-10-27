@@ -248,7 +248,8 @@ export default function ChessGame() {
   const topColor = bottomColor === "w" ? "b" : "w";
   const gameOver = game.isGameOver();
   const result = gameResult(game);
-  const status = botThinking ? `${bot.name} is thinking…` : statusText(game, result);
+  // Not bot.name: the level is already shown in the player bar.
+  const status = botThinking ? "ChessBot is thinking…" : statusText(game, result);
   const moves = game.history();
   const hasMoves = moves.length > 0;
   // Undo needs at least one of *your* moves (as Black, the first move is the bot's).
@@ -264,9 +265,12 @@ export default function ChessGame() {
   );
 
   return (
-    <div className="grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-      {/* Board column: capped by viewport height so the whole board fits on screen */}
-      <section className="mx-auto flex w-full max-w-[min(680px,calc(100dvh_-_13rem))] min-w-[280px] flex-col gap-2">
+    // Board and panel sit side by side as one centred unit; the panel stretches to the board's height.
+    <div className="flex w-full flex-col items-center gap-4 lg:flex-row lg:items-stretch lg:justify-center">
+      {/* Board column: exactly the board's width. The board is as big as the window allows:
+          its height minus header, padding and the two player bars (~12rem), and on wide
+          layouts its width minus the side panel (~24rem). */}
+      <section className="flex w-full max-w-[min(760px,calc(100dvh_-_12rem))] min-w-[280px] flex-col gap-1.5 lg:w-[min(760px,calc(100dvh_-_12rem),calc(100vw_-_24rem))] lg:max-w-none lg:shrink-0">
         {playerBar(topColor)}
         <Chessboard
           position={fen}
@@ -289,7 +293,7 @@ export default function ChessGame() {
       </section>
 
       {/* Side panel */}
-      <aside className="flex flex-col gap-4 rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
+      <aside className="flex w-full max-w-[min(760px,calc(100dvh_-_12rem))] min-w-[280px] flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground shadow-sm lg:w-80 lg:max-w-none lg:shrink-0">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Status
@@ -308,9 +312,10 @@ export default function ChessGame() {
           {botError && <p className="mt-1 text-sm text-destructive">{botError}</p>}
         </div>
 
-        <MoveList moves={moves} />
+        {/* Grows to fill whatever height the board leaves free in the panel. */}
+        <MoveList moves={moves} className="h-40 lg:h-auto lg:min-h-32 lg:flex-1" />
 
-        <div className="flex flex-col gap-3 border-t pt-4">
+        <div className="flex flex-col gap-3 border-t pt-3">
           <SegmentedControl
             label="Play as"
             value={playerColor}
@@ -331,7 +336,7 @@ export default function ChessGame() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 border-t pt-4">
+        <div className="flex flex-col gap-2 border-t pt-3">
           <Button onClick={() => newGame()} className="w-full">
             <RefreshCw />
             New game

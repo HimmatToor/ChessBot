@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 type MoveListProps = {
   /** Moves in SAN, in order played (white, black, white, ...). */
   moves: string[];
+  /** Sizing from the parent (e.g. fixed height on phones, fill the panel on desktop). */
+  className?: string;
 };
 
-export default function MoveList({ moves }: MoveListProps) {
+export default function MoveList({ moves, className }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Keep the latest move in view as the game grows.
@@ -19,7 +21,12 @@ export default function MoveList({ moves }: MoveListProps) {
 
   if (moves.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground",
+          className,
+        )}
+      >
         No moves yet
       </div>
     );
@@ -32,7 +39,7 @@ export default function MoveList({ moves }: MoveListProps) {
   return (
     <div
       ref={scrollRef}
-      className="h-40 overflow-y-auto rounded-lg border bg-background/40 font-mono text-sm lg:h-64"
+      className={cn("overflow-y-auto rounded-lg border bg-background/40 font-mono text-sm", className)}
     >
       <ol>
         {rows.map(([white, black], row) => (

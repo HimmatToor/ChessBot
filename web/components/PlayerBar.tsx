@@ -16,14 +16,14 @@ export default function PlayerBar({ name, color, isTurn, material }: PlayerBarPr
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+        "flex items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors",
         isTurn ? "border-primary/60 bg-primary/10" : "bg-card",
       )}
     >
       <span
         className={cn(
           // The ring keeps the black badge visible on the dark theme's card.
-          "flex size-8 shrink-0 items-center justify-center rounded-md text-xl leading-none ring-1 ring-foreground/20",
+          "flex size-7 shrink-0 items-center justify-center rounded-md text-lg leading-none ring-1 ring-foreground/20",
           color === "w" ? "bg-white text-slate-900" : "bg-slate-900 text-white",
         )}
         aria-hidden
@@ -31,8 +31,9 @@ export default function PlayerBar({ name, color, isTurn, material }: PlayerBarPr
         {color === "w" ? "♔" : "♚"}
       </span>
 
-      <div className="flex min-w-0 flex-col">
-        <span className="font-medium leading-tight">{name}</span>
+      {/* One compact row: name, then captured pieces beside it. */}
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="truncate font-medium">{name}</span>
         <CapturedPieces material={material} />
       </div>
 
@@ -48,9 +49,8 @@ export default function PlayerBar({ name, color, isTurn, material }: PlayerBarPr
 
 function CapturedPieces({ material }: { material: MaterialSide }) {
   const { captured, advantage } = material;
-  // Reserve the row's height even when empty so the bar doesn't jump.
   return (
-    <div className="flex h-5 items-center text-muted-foreground" aria-label={describe(material)}>
+    <div className="flex h-5 shrink-0 items-center text-muted-foreground" aria-label={describe(material)}>
       {captured.map((type, i) => (
         <span
           key={i}
