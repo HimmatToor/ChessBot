@@ -7,7 +7,8 @@ both colours. Stockfish's UCI_Elo (limited-strength mode, calibrated to human
 CCRL-style ratings) gives the opponents' ratings; the bot's rating is the
 maximum-likelihood fit to all its scores. Writes summary.json and games.pgn to --out.
 
-Requires Stockfish (`brew install stockfish`).
+Requires Stockfish: on PATH, or the official build unpacked in training/tools/
+(see "Measuring strength" in README.md).
 """
 
 from __future__ import annotations
@@ -48,6 +49,15 @@ OPENINGS = [
 ]
 
 MAX_PLIES = 400  # adjudicate as a draw after this many half-moves
+
+
+def find_stockfish() -> str | None:
+    """Stockfish on PATH, else the official build unpacked under training/tools/ (see README)."""
+    on_path = shutil.which("stockfish")
+    if on_path:
+        return on_path
+    local = sorted(Path(__file__).resolve().parent.glob("tools/stockfish*/stockfish/stockfish-*"))
+    return str(local[-1]) if local else None
 
 
 class NetPlayer:
@@ -135,12 +145,12 @@ def main(argv: list[str] | None = None) -> None:
                         help="Stockfish UCI_Elo values (Stockfish accepts 1320-3190)")
     parser.add_argument("--games", type=int, default=20, help="games per level per opponent (even: both colours)")
     parser.add_argument("--movetime", type=float, default=0.1, help="Stockfish seconds per move")
-    parser.add_argument("--stockfish", default=shutil.which("stockfish"))
+    parser.add_argument("--stockfish", default=find_stockfish())
     parser.add_argument("--out", type=Path, default=Path("runs/eval"))
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
     if not args.stockfish:
-        parser.error("Stockfish not found: `brew install stockfish` or pass --stockfish PATH")
+        parser.error("Stockfish not found: see 'Measuring strength' in README.md, or pass --stockfish PATH")
 
     torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
     model, checkpoint = load_checkpoint(args.checkpoint)

@@ -64,6 +64,22 @@ CHESSBOT_INPUT=data CHESSBOT_WORK=/tmp/kaggle-work CHESSBOT_REPO=$PWD/.. \
   CHESSBOT_REQUIRE_GPU=0 python kaggle/run.py
 ```
 
+## Measuring strength
+
+`evaluate.py` plays each difficulty level against Stockfish at fixed ratings and
+estimates the level's rating. It needs a Stockfish binary. Homebrew has no
+prebuilt package for Intel Macs on recent macOS (it compiles from source, which
+fails without working Command Line Tools), so use the official build:
+
+```bash
+mkdir -p tools/stockfish-19 && cd tools/stockfish-19
+curl -LO https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-macos-universal.tar.gz
+tar -xzf stockfish-macos-universal.tar.gz && cd ../..
+python evaluate.py runs/full-v1/full-v1/best.pt --levels medium hard --opponents 1400 1700 2000 --games 20
+```
+
+`evaluate.py` finds it there automatically (or uses `stockfish` on PATH).
+
 ## Exporting for the website
 
 ```bash

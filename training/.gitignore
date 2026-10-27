@@ -7,3 +7,6 @@ data/
 checkpoints/
 runs/
 *.onnx
+
+# Downloaded third-party binaries (Stockfish)
+tools/

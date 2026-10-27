@@ -1,7 +1,7 @@
 import random
-import shutil
 
 import chess
+import chess.engine
 import pytest
 import torch
 
@@ -71,9 +71,9 @@ def test_net_player_plays_legal_moves_at_every_level(level):
         board.push(move)
 
 
-@pytest.mark.skipif(shutil.which("stockfish") is None, reason="Stockfish not installed")
+@pytest.mark.skipif(evaluate.find_stockfish() is None, reason="Stockfish not installed")
 def test_stockfish_player_makes_legal_moves():
-    engine = chess.engine.SimpleEngine.popen_uci(shutil.which("stockfish"))
+    engine = chess.engine.SimpleEngine.popen_uci(evaluate.find_stockfish())
     try:
         sf = evaluate.StockfishPlayer(engine, 1500, 0.01)
         board = chess.Board()
